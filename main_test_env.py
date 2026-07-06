@@ -1,3 +1,6 @@
+import logging
+import os
+
 from source.data_imports.import_static_data import (
     import_static_data, 
     assign_static_data_variables
@@ -43,6 +46,24 @@ from source.file_creation_and_saving.create_and_export import (
 )
 
 def main():
+    # ─────────────────────────────────────────────
+    # 0. Folder selection & logging configuration
+    # ─────────────────────────────────────────────
+    print("Select or create a folder for the exports.")
+    folder_selected, now = folder_selection()
+    log_file = os.path.join(folder_selected, f"run_log_{now}.log")
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler(log_file, mode="w"),
+            logging.StreamHandler()
+        ]
+    )
+
+    logging.info("Logging initialized. Log file created in selected folder.")
+    
     # ─────────────────────────────────────────────
     # 1. Import static data
     # ─────────────────────────────────────────────
@@ -142,12 +163,7 @@ def main():
         )
     
     # ─────────────────────────────────────────────
-    # 10. Folder selection
-    # ─────────────────────────────────────────────
-    folder_selected, now = folder_selection()
-    
-    # ─────────────────────────────────────────────
-    # 11. Exporting files
+    # 10. Exporting files
     # ─────────────────────────────────────────────
     export_invalid_mappings_analysis(
         invalid_mappings, 
@@ -191,23 +207,19 @@ def main():
         now
     )
     
-    total_invalid_mapping_count(
+    total_invalid_mappings_count = total_invalid_mapping_count(
         accounting_groups_count, 
         new_profile_need_wf_details_count, 
         need_details_count, 
         user_confirmations_count
     )
     
-    
-    # # Visualize period data tables
-    # print("\nPrinting invalid mappings sample\n")
-    # print(invalid_mappings.head(1))
-    # print("\nPrinting FCCS mappings sample\n")
-    # print(fccs_maps.head(1))
-    # print("\nPrinting profiles sample\n")
-    # print(profiles.head(1))
-    # print("\nPrinting role assignment report sample\n")
-    # print(role_assignment.head(1))
+    logging.info("Program ran successfully.\n")
+    logging.info(f'The total number of invalid mappings is {total_invalid_mappings_count}')
+    logging.info(f'Accounting group mappings - {accounting_groups_count}')
+    logging.info(f'New profile - need details mappings - {new_profile_need_wf_details_count}')
+    logging.info(f'User confirmation mappings - {user_confirmations_count}')
+    logging.info(f'Need details mappings - {need_details_count}')
 
 if __name__ == "__main__":
     main()

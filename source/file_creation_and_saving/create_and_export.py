@@ -28,7 +28,7 @@ def export_invalid_mappings_analysis(
     tab_1b_ag, 
     tab_1b_need_details, 
     folder_selected, 
-    now):
+    now): # add fa_mappings before folder_selected
     logger.info("Saving invalid mappings analysis to your selected folder.")
     
     if folder_selected:
@@ -42,6 +42,7 @@ def export_invalid_mappings_analysis(
         tab_1b.to_excel(writer, sheet_name='1B', index=False)
         tab_1b_ag.to_excel(writer, sheet_name='1B AG', index=False)
         tab_1b_need_details.to_excel(writer, sheet_name='1B Need Details', index=False)
+        # fa_mappings.to_excel(writer, sheet_name='FA mappings', index=False)
         
         writer._save()
         

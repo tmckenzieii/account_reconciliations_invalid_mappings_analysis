@@ -4,22 +4,30 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def accounting_group_prep(tab, global_acc, tab_name):
-    logger.info(f"Checking {tab_name} data for accounting group overlap.")
+def accounting_group_prep(
+    tab, 
+    global_accounting_groups, 
+    separated_1x_dataframe_label):
+    logger.info(f"Checking {separated_1x_dataframe_label} data for accounting group overlap.")
     
     if not tab.empty:
         tab = tab.copy()
-        tab['Acc Group?'] = tab['AC'].isin(global_acc['Future State - Account'])
+        tab['Acc Group?'] = tab['AC'].isin(global_accounting_groups['Future State - Account'])
     else:
-        logger.info(f"{tab_name} is empty, skipping processing.")
+        logger.info(f"{separated_1x_dataframe_label} is empty, skipping processing.")
     
     return tab
 
-def create_accounting_groups_dfs(tab, global_acc, consolidated_pre_rev, profiles, tab_name):
-    logger.info(f"Creating {tab_name} accounting group data.")
+def create_accounting_groups_dfs(
+    tab, 
+    global_accounting_groups, 
+    consolidated_preparers_and_reviewers, 
+    profiles, 
+    separated_1x_dataframe_label):
+    logger.info(f"Creating {separated_1x_dataframe_label} accounting group data.")
     
     if tab.empty:
-        logger.info(f"{tab_name} is empty. Returning an empty dataframe.")
+        logger.info(f"{separated_1x_dataframe_label} is empty. Returning an empty dataframe.")
         return pd.DataFrame(
             columns=[
                 'AC', 
@@ -30,52 +38,56 @@ def create_accounting_groups_dfs(tab, global_acc, consolidated_pre_rev, profiles
             ]
         )
 
-    tab_1x_ag = tab[tab['AC'].isin(global_acc['Future State - Account'])].copy()
+    separated_1x_ag = tab[tab['AC'].isin(global_accounting_groups['Future State - Account'])].copy()
     
-    tab_1x_ag['Acc Groups'] = tab_1x_ag['AC'].map(
-        global_acc.set_index('Future State - Account')['Wesco 1A Account Grouping Exceptions']
+    separated_1x_ag['Acc Groups'] = separated_1x_ag['AC'].map(
+        global_accounting_groups.set_index('Future State - Account')['Wesco 1A Account Grouping Exceptions']
         )
-    tab_1x_ag['Acc Desc'] = tab_1x_ag['Acc Groups'].map(
-        consolidated_pre_rev.set_index('Account Group')['Account Description']
+    separated_1x_ag['Acc Desc'] = separated_1x_ag['Acc Groups'].map(
+        consolidated_preparers_and_reviewers.set_index('Account Group')['Account Description']
         )
-    tab_1x_ag['Grouping'] = tab_1x_ag['Acc Groups'].map(
-        consolidated_pre_rev.set_index('Account Group')['Grouping']
+    separated_1x_ag['Grouping'] = separated_1x_ag['Acc Groups'].map(
+        consolidated_preparers_and_reviewers.set_index('Account Group')['Grouping']
         )
     
     conditions = [
-        (tab_1x_ag['Grouping'] == 'LE'),
-        (tab_1x_ag['Grouping'] == 'LE & OG'),
-        (tab_1x_ag['Grouping'] == 'Globally')
+        (separated_1x_ag['Grouping'] == 'LE'),
+        (separated_1x_ag['Grouping'] == 'LE & OG'),
+        (separated_1x_ag['Grouping'] == 'Globally')
         ]
     
     choices = [
-        tab_1x_ag['LE'].astype(str) 
+        separated_1x_ag['LE'].astype(str) 
         + '-XXXX-' 
-        + tab_1x_ag['Acc Desc'].astype(str) 
+        + separated_1x_ag['Acc Desc'].astype(str) 
         + '-XXXX-XXXXX-XXXX-XXXX-XXXX',
-        tab_1x_ag['LE'].astype(str) 
-        + '-' + tab_1x_ag['OG'].astype(str) 
-        + '-' + tab_1x_ag['Acc Desc'].astype(str) 
+        separated_1x_ag['LE'].astype(str) 
+        + '-' + separated_1x_ag['OG'].astype(str) 
+        + '-' + separated_1x_ag['Acc Desc'].astype(str) 
         + '-XXXX-XXXXX-XXXX-XXXX-XXXX',
         'XXXX-XXXX-' 
-        + tab_1x_ag['Acc Desc'].astype(str) 
+        + separated_1x_ag['Acc Desc'].astype(str) 
         + '-XXXX-XXXXX-XXXX-XXXX-XXXX'
         ]
     
-    tab_1x_ag['Proposed Target from Mapping'] = np.select(
+    separated_1x_ag['Proposed Target from Mapping'] = np.select(
         conditions, 
         choices, 
         default=''
         )
     
-    mask = ~tab_1x_ag['Proposed Target from Mapping'].isin(
+    mask = ~separated_1x_ag['Proposed Target from Mapping'].isin(
         profiles['Joined Target']
         )
-    tab_1x_ag.loc[mask, 'Proposed Target from Mapping'] = 'No Target'
+    separated_1x_ag.loc[mask, 'Proposed Target from Mapping'] = 'No Target'
     
-    return tab_1x_ag
+    return separated_1x_ag
 
-def finalize_accounting_groups_dfs(tab_1a_ag, tab_1b_ag, profiles, role_assignment):
+def finalize_accounting_groups_dfs(
+    separated_1a_invalid_mappings, 
+    separated_1b_invalid_mappings, 
+    profiles, 
+    role_assignment):
     logger.info("Finalizing account group data for future export.")
     
     columns_to_drop = ['LE', 
@@ -88,8 +100,8 @@ def finalize_accounting_groups_dfs(tab_1a_ag, tab_1b_ag, profiles, role_assignme
         'Grouping'
         ]
     
-    accounting_groups_1a = tab_1a_ag[
-        tab_1a_ag['Proposed Target from Mapping'] != 'No Target'
+    accounting_groups_1a = separated_1a_invalid_mappings[
+        separated_1a_invalid_mappings['Proposed Target from Mapping'] != 'No Target'
         ]
     accounting_groups_1a = accounting_groups_1a.drop(
         columns=columns_to_drop, 
@@ -105,7 +117,7 @@ def finalize_accounting_groups_dfs(tab_1a_ag, tab_1b_ag, profiles, role_assignme
         )
     accounting_groups_1a['User Email'] = accounting_groups_1a['User ID'].map(role_assignment_mapping_dict)
 
-    accounting_groups_1b = tab_1b_ag[tab_1b_ag['Proposed Target from Mapping'] != 'No Target']
+    accounting_groups_1b = separated_1b_invalid_mappings[separated_1b_invalid_mappings['Proposed Target from Mapping'] != 'No Target']
     accounting_groups_1b = accounting_groups_1b.drop(columns=columns_to_drop, errors='ignore')
     accounting_groups_1b.reset_index(drop=True, inplace=True)
     
@@ -120,19 +132,19 @@ def finalize_accounting_groups_dfs(tab_1a_ag, tab_1b_ag, profiles, role_assignme
 def create_1a_non_accounting_groups_df(tab_1a, fccs_maps):
     logger.info("Creating 1A non-accounting group data.")
     
-    tab_1a_non_ag = tab_1a[tab_1a['Acc Group?'] == False].copy()
-    tab_1a_non_ag.drop('Acc Group?', axis=1, inplace=True)
+    non_accounting_group_1a = tab_1a[tab_1a['Acc Group?'] == False].copy()
+    non_accounting_group_1a.drop('Acc Group?', axis=1, inplace=True)
     
     for col in ['LE', 'OG', 'AC']:
-        tab_1a_non_ag[col] = tab_1a_non_ag[col].str.strip().str.upper()
+        non_accounting_group_1a[col] = non_accounting_group_1a[col].str.strip().str.upper()
         
-    tab_1a_non_ag['LE-OG-AC'] = (
-        tab_1a_non_ag['LE'] 
-        + '-' + tab_1a_non_ag['OG'] 
-        + '-' + tab_1a_non_ag['AC']
+    non_accounting_group_1a['LE-OG-AC'] = (
+        non_accounting_group_1a['LE'] 
+        + '-' + non_accounting_group_1a['OG'] 
+        + '-' + non_accounting_group_1a['AC']
     )
     
-    tab_1a_non_ag['Proposed Target from Mapping'] = tab_1a_non_ag[
+    non_accounting_group_1a['Proposed Target from Mapping'] = non_accounting_group_1a[
         'LE-OG-AC'
         ].apply(
             lambda x: (
@@ -142,23 +154,23 @@ def create_1a_non_accounting_groups_df(tab_1a, fccs_maps):
             )
         )
     
-    tab_1a_non_ag = tab_1a_non_ag.drop(columns=['LE', 'LE Clean', 'OG', 'AC']) 
+    non_accounting_group_1a = non_accounting_group_1a.drop(columns=['LE', 'LE Clean', 'OG', 'AC']) 
     
     try:
-        tab_1a_errored_rows = tab_1a_non_ag[~tab_1a_non_ag['Proposed Target from Mapping'].str.endswith('XXXX')
-                                        & (tab_1a_non_ag['Proposed Target from Mapping'] != 'No Target')]
+        tab_1a_errored_rows = non_accounting_group_1a[~non_accounting_group_1a['Proposed Target from Mapping'].str.endswith('XXXX')
+                                        & (non_accounting_group_1a['Proposed Target from Mapping'] != 'No Target')]
         
         tab_1a_errored_rows = tab_1a_errored_rows.drop(
             columns=['LE-OG-AC', 'Proposed Target from Mapping']
             )
         
-        tab_1a_non_ag = tab_1a_non_ag.drop(tab_1a_errored_rows)
+        non_accounting_group_1a = non_accounting_group_1a.drop(tab_1a_errored_rows)
         
-        logger.info(tab_1a_non_ag)
+        logger.info(non_accounting_group_1a)
         
         if not tab_1a_errored_rows.empty:
-            tab_1a_non_ag = tab_1a_non_ag[
-                ~tab_1a_non_ag['Account ID'].isin(
+            non_accounting_group_1a = non_accounting_group_1a[
+                ~non_accounting_group_1a['Account ID'].isin(
                     tab_1a_errored_rows['Account ID']
                     )
                 ]
@@ -166,5 +178,5 @@ def create_1a_non_accounting_groups_df(tab_1a, fccs_maps):
     except KeyError as e:
         logger.info(f"Error: {e} column not found in data frame")
         
-    return tab_1a_non_ag, tab_1a_errored_rows
+    return non_accounting_group_1a, tab_1a_errored_rows
 

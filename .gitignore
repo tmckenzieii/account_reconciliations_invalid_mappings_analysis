@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# VS Code settings (optional)
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+non_dynamic_data/consolidated_preparers_and_reviewers.csv
+non_dynamic_data/global_accounting_group_db.csv
+main_test_env.py
